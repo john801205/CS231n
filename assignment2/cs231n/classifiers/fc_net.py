@@ -47,7 +47,15 @@ class TwoLayerNet(object):
         # and biases using the keys 'W1' and 'b1' and second layer                 #
         # weights and biases using the keys 'W2' and 'b2'.                         #
         ############################################################################
-        pass
+        self.params['W1'] = np.random.normal(loc=0.0,
+                                             scale=weight_scale,
+                                             size=(input_dim, hidden_dim))
+        self.params['b1'] = np.zeros(hidden_dim)
+
+        self.params['W2'] = np.random.normal(loc=0.0,
+                                             scale=weight_scale,
+                                             size=(hidden_dim, num_classes))
+        self.params['b2'] = np.zeros(num_classes)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -77,7 +85,12 @@ class TwoLayerNet(object):
         # TODO: Implement the forward pass for the two-layer net, computing the    #
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
-        pass
+        W1, b1 = self.params['W1'], self.params['b1']
+        W2, b2 = self.params['W2'], self.params['b2']
+
+        X1, X1_affine_relu_cache = affine_relu_forward(X, W1, b1)
+
+        scores, scores_affine_cache = affine_forward(X1, W2, b2)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -97,7 +110,24 @@ class TwoLayerNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
-        pass
+        data_loss, dout = softmax_loss(scores, y)
+        reg_loss = self.reg * 0.5 * np.sum(np.square(W1))
+        reg_loss += self.reg * 0.5 * np.sum(np.square(W2))
+        loss = data_loss + reg_loss
+
+        dX1, dW2, db2 = affine_backward(dout, scores_affine_cache)
+
+        dX, dW1, db1 = affine_relu_backward(dX1, X1_affine_relu_cache)
+
+        dW2 += self.reg * W2
+        dW1 += self.reg * W1
+
+        grads.update({
+            'W1': dW1,
+            'b1': db1,
+            'W2': dW2,
+            'b2': db2
+            })
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -164,7 +194,17 @@ class FullyConnectedNet(object):
         # beta2, etc. Scale parameters should be initialized to ones and shift     #
         # parameters should be initialized to zeros.                               #
         ############################################################################
-        pass
+        all_dims = [input_dim] + hidden_dims + [num_classes]
+        for i, (prev, cur) in enumerate(zip(all_dims[:-1], all_dims[1:]), start=1):
+            w = 'W{}'.format(i)
+            b = 'b{}'.format(i)
+
+            self.params[w] = np.random.normal(loc=0.0,
+                                              scale=weight_scale,
+                                              size=(prev, cur))
+            self.params[b] = np.zeros(cur)
+
+        self.all_dims = all_dims
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -223,7 +263,23 @@ class FullyConnectedNet(object):
         # self.bn_params[1] to the forward pass for the second batch normalization #
         # layer, etc.                                                              #
         ############################################################################
-        pass
+        _X = X
+        caches = [0]
+
+        for i in range(1, len(self.all_dims)):
+            _W = 'W{}'.format(i)
+            _b = 'b{}'.format(i)
+            W, b = self.params[_W], self.params[_b]
+
+            if i == len(self.all_dims)-1:
+                _X, cache = affine_forward(_X, W, b)
+            else:
+                _X, cache = affine_relu_forward(_X, W, b)
+
+            caches.append(cache)
+
+        scores = _X
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -246,7 +302,33 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
-        pass
+        data_loss, dout = softmax_loss(scores, y)
+
+        reg_loss = 0
+        for i in range(1, len(self.all_dims)):
+            _W = 'W{}'.format(i)
+            W = self.params[_W]
+            reg_loss += self.reg * 0.5 * np.sum(np.square(W))
+
+        loss = data_loss + reg_loss
+
+        for i in range(len(self.all_dims)-1, 0, -1):
+            cache = caches[i]
+
+            if i == len(self.all_dims)-1:
+                dX, dW, db = affine_backward(dout, cache)
+            else:
+                dX, dW, db = affine_relu_backward(dX, cache)
+
+            _W = 'W{}'.format(i)
+            _b = 'b{}'.format(i)
+            W = self.params[_W]
+            dW += self.reg * W
+
+            grads.update({
+                _W: dW,
+                _b: db
+                })
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
