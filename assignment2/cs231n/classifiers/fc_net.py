@@ -6,6 +6,68 @@ from cs231n.layers import *
 from cs231n.layer_utils import *
 
 
+def affine_batchnorm_relu_forward(x, w, b, gamma, beta, bn_param):
+    """
+    Convenience layer that perorms an affine transform followed by a BatchNorm and a ReLU
+
+    Inputs:
+    - x: Input to the affine layer
+    - w, b: Weights for the affine layer
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    """
+    a, fc_cache = affine_forward(x, w, b)
+    b, norm_cache = batchnorm_forward(a, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(b)
+    cache = (fc_cache, norm_cache, relu_cache)
+    return out, cache
+
+
+def affine_batchnorm_relu_backward(dout, cache):
+    """
+    Backward pass for the affine-batchnorm-relu convenience layer
+    """
+    fc_cache, norm_cache, relu_cache = cache
+    db = relu_backward(dout, relu_cache)
+    da, dgamma, dbeta = batchnorm_backward_alt(db, norm_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db, dgamma, dbeta
+
+
+
+def affine_layernorm_relu_forward(x, w, b, gamma, beta, bn_param):
+    """
+    Convenience layer that perorms an affine transform followed by a layer norm and a ReLU
+
+    Inputs:
+    - x: Input to the affine layer
+    - w, b: Weights for the affine layer
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    """
+    a, fc_cache = affine_forward(x, w, b)
+    b, norm_cache = layernorm_forward(a, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(b)
+    cache = (fc_cache, norm_cache, relu_cache)
+    return out, cache
+
+
+def affine_layernorm_relu_backward(dout, cache):
+    """
+    Backward pass for the affine-relu convenience layer
+    """
+    fc_cache, norm_cache, relu_cache = cache
+    db = relu_backward(dout, relu_cache)
+    da, dgamma, dbeta = layernorm_backward(db, norm_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db, dgamma, dbeta
+
+
+
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network with ReLU nonlinearity and
@@ -204,6 +266,16 @@ class FullyConnectedNet(object):
                                               size=(prev, cur))
             self.params[b] = np.zeros(cur)
 
+            if i == len(all_dims)-1:
+                continue
+            elif normalization == 'batchnorm' or normalization == 'layernorm':
+                gamma = 'gamma{}'.format(i)
+                beta = 'beta{}'.format(i)
+
+                self.params[gamma] = np.ones(cur)
+                self.params[beta] = np.zeros(cur)
+
+
         self.all_dims = all_dims
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -273,6 +345,20 @@ class FullyConnectedNet(object):
 
             if i == len(self.all_dims)-1:
                 _X, cache = affine_forward(_X, W, b)
+            elif self.normalization == 'batchnorm':
+                _gamma = 'gamma{}'.format(i)
+                _beta = 'beta{}'.format(i)
+                gamma, beta = self.params[_gamma], self.params[_beta]
+                bn_param = self.bn_params[i-1]
+
+                _X, cache = affine_batchnorm_relu_forward(_X, W, b, gamma, beta, bn_param)
+            elif self.normalization == 'layernorm':
+                _gamma = 'gamma{}'.format(i)
+                _beta = 'beta{}'.format(i)
+                gamma, beta = self.params[_gamma], self.params[_beta]
+                bn_param = self.bn_params[i-1]
+
+                _X, cache = affine_layernorm_relu_forward(_X, W, b, gamma, beta, bn_param)
             else:
                 _X, cache = affine_relu_forward(_X, W, b)
 
@@ -317,6 +403,24 @@ class FullyConnectedNet(object):
 
             if i == len(self.all_dims)-1:
                 dX, dW, db = affine_backward(dout, cache)
+            elif self.normalization == 'batchnorm':
+                dX, dW, db, dgamma, dbeta = affine_batchnorm_relu_backward(dX, cache)
+
+                _gamma = 'gamma{}'.format(i)
+                _beta = 'beta{}'.format(i)
+                grads.update({
+                    _gamma: dgamma,
+                    _beta: dbeta,
+                    })
+            elif self.normalization == 'layernorm':
+                dX, dW, db, dgamma, dbeta = affine_layernorm_relu_backward(dX, cache)
+
+                _gamma = 'gamma{}'.format(i)
+                _beta = 'beta{}'.format(i)
+                grads.update({
+                    _gamma: dgamma,
+                    _beta: dbeta,
+                    })
             else:
                 dX, dW, db = affine_relu_backward(dX, cache)
 
@@ -327,7 +431,7 @@ class FullyConnectedNet(object):
 
             grads.update({
                 _W: dW,
-                _b: db
+                _b: db,
                 })
         ############################################################################
         #                             END OF YOUR CODE                             #
