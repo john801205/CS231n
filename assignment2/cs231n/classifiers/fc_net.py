@@ -362,6 +362,10 @@ class FullyConnectedNet(object):
             else:
                 _X, cache = affine_relu_forward(_X, W, b)
 
+            if i != len(self.all_dims)-1 and self.use_dropout:
+                _X, dropout_cache = dropout_forward(_X, self.dropout_param)
+                cache = (cache, dropout_cache)
+
             caches.append(cache)
 
         scores = _X
@@ -400,6 +404,10 @@ class FullyConnectedNet(object):
 
         for i in range(len(self.all_dims)-1, 0, -1):
             cache = caches[i]
+
+            if i != len(self.all_dims)-1 and self.use_dropout:
+                cache, dropout_cache = cache
+                dX = dropout_backward(dX, dropout_cache)
 
             if i == len(self.all_dims)-1:
                 dX, dW, db = affine_backward(dout, cache)
