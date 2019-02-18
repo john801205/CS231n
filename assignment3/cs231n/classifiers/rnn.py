@@ -140,9 +140,16 @@ class CaptioningRNN(object):
         # Note also that you are allowed to make use of functions from layers.py   #
         # in your implementation, if needed.                                       #
         ############################################################################
+        if self.cell_type == 'rnn':
+            forward_function = rnn_forward
+            backward_function = rnn_backward
+        elif self.cell_type == 'lstm':
+            forward_function = lstm_forward
+            backward_function = lstm_backward
+
         h0 = features @ W_proj + b_proj
         x, word_embedding_cache = word_embedding_forward(captions_in, W_embed)
-        x, rnn_cache = rnn_forward(x, h0, Wx, Wh, b)
+        x, rnn_cache = forward_function(x, h0, Wx, Wh, b)
         x, temporal_affine_cache = temporal_affine_forward(x, W_vocab, b_vocab)
         loss, dout = temporal_softmax_loss(x, captions_out, mask)
 
@@ -150,7 +157,7 @@ class CaptioningRNN(object):
         grads['W_vocab'] = dW
         grads['b_vocab'] = db
 
-        dx, dh0, dWx, dWh, db = rnn_backward(dx, rnn_cache)
+        dx, dh0, dWx, dWh, db = backward_function(dx, rnn_cache)
         grads['Wx'] = dWx
         grads['Wh'] = dWh
         grads['b'] = db
@@ -228,10 +235,16 @@ class CaptioningRNN(object):
 
         h = features @ W_proj + b_proj
         prev_words = np.full((N, 1), self._start)
+        prev_c = np.zeros_like(h)
         for t in range(max_length):
             embeddings, _ = word_embedding_forward(prev_words, W_embed)
             embeddings = embeddings.reshape((N, -1))
-            h, _ = rnn_step_forward(embeddings, h, Wx, Wh, b)
+
+            if self.cell_type == 'rnn':
+                h, _ = rnn_step_forward(embeddings, h, Wx, Wh, b)
+            elif self.cell_type == 'lstm':
+                h, prev_c, _ = lstm_step_forward(embeddings, h, prev_c, Wx, Wh, b)
+
             scores, _ = temporal_affine_forward(h[:, np.newaxis, :], W_vocab, b_vocab)
             prev_words = np.argmax(scores, axis=-1)
 
